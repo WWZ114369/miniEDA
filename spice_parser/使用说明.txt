@@ -1,0 +1,165 @@
+SPICE 网表解析器使用说明
+========================
+
+一、项目简介
+------------
+
+本程序读取简化的 SPICE 网表，识别支持的元件和节点，并输出元件总数、
+节点总数以及是否存在地节点 0。
+
+当前程序只负责解析和统计，不进行电路仿真或电气计算。
+
+
+二、构建程序
+------------
+
+项目使用 CMake 和 C++17。
+
+使用 Visual Studio：
+1. 在 Visual Studio 中打开项目根目录（包含 CMakeLists.txt 的目录）。
+2. 等待 CMake 配置完成。
+3. 生成 spice_parser 目标。
+4. 生成的程序位于对应构建目录下的 src/spice_parser.exe。
+
+使用命令行（在已安装并配置 CMake、Ninja 和 MSVC 的开发者命令行中）：
+
+    cmake -S . -B out/build
+    cmake --build out/build --target spice_parser
+
+如果使用 Visual Studio 的 CMake 配置，生成目录可能是
+out/build/x64-Debug；具体以 Visual Studio 当前选中的配置为准。
+
+如需 Release 构建（解析速度明显更快）：
+
+    cmake -S . -B out/build/release -DCMAKE_BUILD_TYPE=Release
+    cmake --build out/build/release --target spice_parser
+
+
+三、运行程序
+------------
+
+方式一：读取网表文件
+
+    spice_parser.exe 电路文件.cir
+
+例如：
+
+    spice_parser.exe example.cir
+
+方式二：从标准输入读取
+
+    spice_parser.exe
+
+启动后粘贴或输入网表内容，按 Ctrl+Z 后再按 Enter 结束输入。
+在 PowerShell 中也可以使用管道：
+
+    Get-Content example.cir | .\spice_parser.exe
+
+正常运行时输出示例：
+
+    Parsed 3 components across 3 nodes.
+    Ground node (0): present
+
+如果输入文件无法打开或网表有错误，程序会在标准错误输出原因并返回非零
+退出码。
+
+
+四、支持的网表内容
+------------------
+
+1. 电阻（R）：名称、两个节点、电阻值
+
+    R1 input output 1k
+
+2. 电容（C）：名称、两个节点、电容值
+
+    C1 output 0 10u
+
+3. 直流电压源（V）：名称、两个节点、电压值；DC 关键字可省略
+
+    V1 input 0 5
+    V2 input 0 DC 5
+
+4. 四端 MOSFET（M）：名称、漏极、栅极、源极、衬底、模型名，以及可选的
+   W 和 L 参数
+
+    M1 drain gate source bulk nmos W=2u L=1u
+
+节点名和元件名以空白字符分隔。元件类型由名称首字母确定，R、C、V、M
+大小写均可。SPICE 的元件名和节点名不区分大小写：节点名在内部统一转为
+小写，因此 IN 和 in 是同一个节点；重复的元件名会被拒绝。
+
+空行会被忽略。以星号开头的整行（前面可有空格）、美元符号后的行内内容
+和分号后的行内内容都会作为注释忽略。文件开头的 UTF-8 BOM 会被自动去掉。
+
+以点号开头的指令行会被忽略；遇到 .end 时停止读取后续内容，遇到 .subckt
+时会报错（当前不支持子电路）。以 + 开头的续行也会报错（当前不支持续行）。
+
+网表可以有一行自由格式标题。第一行只有在首个 token 形如“字母+数字”
+（如 R1、M2）时才按元件解析，否则视为标题；因此首行元件名若不含数字
+（如 Rload）会被误当成标题，建议第一行写标题或注释。
+
+
+五、数值后缀
+------------
+
+数值可使用以下后缀（大小写不敏感）：
+
+    T    1e12
+    G    1e9
+    MEG  1e6
+    K    1e3
+    M    1e-3
+    U    1e-6
+    N    1e-9
+    P    1e-12
+    F    1e-15
+
+例如，1k 表示 1000，2.2u 表示 0.0000022。后缀后不能附加单位文字；
+例如当前实现接受 1k，不接受 1kohm。
+
+
+六、完整示例
+------------
+
+将以下内容保存为 example.cir：
+
+    简单电阻分压电路
+    * 直流电压源、电阻和电容示例
+    V1 input 0 DC 5
+    R1 input output 1k
+    C1 output 0 10u
+    .end
+
+运行：
+
+    spice_parser.exe example.cir
+
+预期结果：
+
+    Parsed 3 components across 3 nodes.
+    Ground node (0): present
+
+
+七、当前限制
+------------
+
+1. 支持的元件仅有 R、C、直流 V 和四端 M。
+2. 暂不支持电流源、交流源、脉冲源、子电路、续行、表达式和模型定义；
+   遇到 .subckt 或 + 续行会直接报错，而不是静默跳过。
+3. MOSFET 目前只接受 W、L 参数；不接受其他参数。
+4. 除 .end 和 .subckt 外，点号指令仅被跳过，不会执行或验证。
+5. 本程序只构建解析出的拓扑并统计，不执行仿真。
+6. 标题行依赖“字母+数字”的启发式判断；首行元件名不含数字时可能被当作
+   标题，建议第一行写标题或注释。
+
+
+八、运行测试
+------------
+
+在已配置好的 CMake 构建目录中执行：
+
+    ctest --test-dir out/build --output-on-failure
+
+若使用 Visual Studio 的多配置构建目录，请将 out/build 替换为实际目录，
+例如 out/build/x64-Debug。

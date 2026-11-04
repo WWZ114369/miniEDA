@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"D:/spice_parser/out/build/release/cmake_install.cmake",
+		"D:/spice_parser/out/build/release/src/cmake_install.cmake",
+		"D:/spice_parser/out/build/release/tests/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
